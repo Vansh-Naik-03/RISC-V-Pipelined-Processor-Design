@@ -1,135 +1,174 @@
-# RV32I 5-Stage Pipelined Processor
+# Pipelined ALU with Data Forwarding 
 
-A fully synthesizable, FPGA-ready implementation of the RISC-V RV32I base ISA
-featuring a classic 5-stage pipeline with data forwarding and hazard detection.
+## Overview
+
+This project implements a **3-stage pipelined Arithmetic Logic Unit (ALU)** in **Verilog HDL** with a **data forwarding unit** to resolve **Read After Write (RAW) data hazards**.
+
+The design demonstrates key concepts used in modern processor pipelines such as **pipeline registers, hazard detection, and operand forwarding**.
+
+---
+
+## Features
+
+* 3-Stage Pipeline Architecture
+* Data Forwarding Unit for hazard resolution
+* Supports basic ALU operations:
+
+  * ADD
+  * SUB
+  * AND
+* Pipeline register implementation
+* Verilog Testbench for simulation
+* Simulation verification using waveform / console output
+
+---
+
+## Pipeline Architecture
+
+The ALU is divided into **three stages**:
+
+| Stage   | Description             |
+| ------- | ----------------------- |
+| Stage 1 | Fetch / Input Capture   |
+| Stage 2 | Execute (ALU Operation) |
+| Stage 3 | Writeback               |
+
+### Pipeline Flow
+
+```
+Cycle 1
+Stage1 : Instruction 1
+
+Cycle 2
+Stage1 : Instruction 2
+Stage2 : Instruction 1
+
+Cycle 3
+Stage1 : Instruction 3
+Stage2 : Instruction 2
+Stage3 : Instruction 1
+```
+
+---
+
+## Data Hazard and Forwarding
+
+### RAW Hazard Example
+
+```
+ADD x5, x1, x2
+SUB x6, x5, x3
+```
+
+The **SUB instruction requires the result of ADD**, but the value has not yet been written back to the register file.
+
+Without forwarding:
+
+* Pipeline stall required.
+
+With forwarding:
+
+* Result from the **Execute stage is directly forwarded** to the next instruction.
+
+Forwarding logic checks:
+
+```
+if (rd_s2 == rs1_s1)
+if (rd_s2 == rs2_s1)
+```
+
+and forwards the computed value.
+
+---
+
+## Supported ALU Operations
+
+| Opcode | Operation |
+| ------ | --------- |
+| 000    | ADD       |
+| 001    | SUB       |
+| 010    | AND       |
+
+Example:
+
+```
+3'b000 : res = A + B
+3'b001 : res = A - B
+3'b010 : res = A & B
+```
 
 ---
 
 ## Project Structure
 
 ```
-riscv32/
-├── rtl/
-│   ├── top.v             ← Top-level integration (start here)
-│   ├── pc.v              ← Program Counter
-│   ├── instr_mem.v       ← Instruction Memory (ROM)
-│   ├── reg_file.v        ← 32×32 Register File
-│   ├── alu.v             ← ALU (ADD/SUB/AND/OR/XOR/SLT/SLL/SRL/SRA)
-│   ├── alu_control.v     ← Decodes funct3/funct7 → ALU op
-│   ├── imm_gen.v         ← Immediate Generator (all RV32I formats)
-│   ├── control_unit.v    ← Main Control Unit
-│   ├── hazard_unit.v     ← Load-Use Hazard Detection
-│   ├── forwarding_unit.v ← RAW Data Forwarding (EX/MEM → EX)
-│   ├── data_mem.v        ← Data Memory (LB/LH/LW/SB/SH/SW)
-│   └── pipeline_regs.v  ← IF/ID, ID/EX, EX/MEM, MEM/WB registers
+pipelined-alu-forwarding/
 │
-├── tb/
-│   └── tb_top.v          ← Self-checking testbench
-│
-└── README.md
+├── pipelined_alu_forwarding.v      # Main RTL module
+├── pipelined_alu_forwarding_tb.v   # Testbench
+├── README.md                       # Project documentation
 ```
 
 ---
 
-## Features
+## Simulation
 
-| Feature               | Status |
-|-----------------------|--------|
-| RV32I Base ISA        | ✅     |
-| 5-Stage Pipeline      | ✅     |
-| Data Forwarding (EX→EX, MEM→EX) | ✅ |
-| Load-Use Hazard Detection | ✅  |
-| Branch Resolution (EX stage) | ✅ |
-| JAL / JALR            | ✅     |
-| LUI / AUIPC           | ✅     |
-| Byte/Half/Word memory | ✅     |
-| Self-checking testbench | ✅   |
+### Tools Used
+
+* Vivado Simulator / ModelSim / Icarus Verilog
+
+### Example Simulation Output
+
+```
+Time=45000 | ALU_OUT=15 | RD=5 | REG_WRITE=1
+Time=55000 | ALU_OUT=12 | RD=6 | REG_WRITE=1
+Time=65000 | ALU_OUT=0  | RD=9 | REG_WRITE=1
+Time=75000 | ALU_OUT=30 | RD=4 | REG_WRITE=1
+```
+
+### Interpretation
+
+| Instruction | Result |
+| ----------- | ------ |
+| ADD 10 + 5  | 15     |
+| SUB 15 - 3  | 12     |
+| AND 8 & 4   | 0      |
+| ADD 20 + 10 | 30     |
+
+The **SUB instruction successfully used forwarded data**, proving that the forwarding unit works correctly.
 
 ---
 
-## How to Simulate (Icarus Verilog)
 
-```bash
-# Compile
-iverilog -o sim.out rtl/top.v tb/tb_top.v
+## Learning Outcomes
 
-# Run
-vvp sim.out
+This project demonstrates important **processor design concepts**:
 
-# View waveforms
-gtkwave waves.vcd
-```
-
-### Using Vivado (Xilinx)
-
-1. Create new RTL project, target Artix-7 (xc7a35tcpg236-1)
-2. Add all `rtl/*.v` as design sources
-3. Add `tb/tb_top.v` as simulation source
-4. Run Behavioral Simulation
-5. For synthesis: set `top` as the top module and Run Synthesis
+* RTL Design using Verilog
+* Pipeline architecture
+* Data hazard detection
+* Data forwarding
+* Pipeline register design
+* Hardware verification using testbenches
 
 ---
 
-## Pipeline Overview
+## Possible Improvements
 
-```
-Clock:  1   2   3   4   5   6
-I1:    IF  ID  EX  ME  WB
-I2:        IF  ID  EX  ME  WB
-I3:            IF  ID  EX  ME  WB
-```
+Future improvements could include:
 
-### Hazard Handling
-
-**Load-Use Stall (1 cycle)**
-```
-lw  x1, 0(x2)     ← load
-add x3, x1, x4    ← needs x1 → stall inserted
-```
-
-**Data Forwarding (0 cycles)**
-```
-add x1, x2, x3    ← produces x1 in EX
-sub x4, x1, x5    ← EX/MEM → EX forwarding: no stall
-```
-
-**Branch (2-cycle penalty, flushed)**
-```
-beq x1, x2, label ← resolved in EX stage
-                   ← IF+ID stages flushed on taken branch
-```
+* 5-stage pipeline (IF, ID, EX, MEM, WB)
+* Hazard Detection Unit
+* Pipeline Stall Logic
+* Branch Handling
+* Register File Integration
+* RISC-V Instruction Support
 
 ---
 
-## Expected Performance (Artix-7)
-
-| Metric        | Value        |
-|---------------|--------------|
-| Fmax          | ~120–140 MHz |
-| LUT Usage     | ~3,000       |
-| CPI (no hazards) | 1.0      |
-| CPI (with hazards) | ~1.2   |
 
 ---
 
-## Supported Instructions
+## License
 
-| Type   | Instructions                                      |
-|--------|---------------------------------------------------|
-| R-type | ADD, SUB, AND, OR, XOR, SLT, SLTU, SLL, SRL, SRA |
-| I-type | ADDI, ANDI, ORI, XORI, SLTI, SLTIU, SLLI, SRLI, SRAI |
-| Load   | LW, LH, LB, LHU, LBU                             |
-| Store  | SW, SH, SB                                        |
-| Branch | BEQ, BNE, BLT, BGE, BLTU, BGEU                   |
-| Jump   | JAL, JALR                                         |
-| Upper  | LUI, AUIPC                                        |
-
----
-
-## Possible Extensions
-
-- Instruction Cache (Direct-Mapped)
-- Static Branch Prediction (Predict Not-Taken)
-- AXI-Lite Bus Interface
-- CSR Registers (mtvec, mepc, mcause for traps)
-- OpenLane GDSII flow (RTL → ASIC)
+This project is released under the **MIT License**.
