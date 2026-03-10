@@ -167,8 +167,3 @@ Future improvements could include:
 ---
 
 
----
-
-## License
-
-This project is released under the **MIT License**.
